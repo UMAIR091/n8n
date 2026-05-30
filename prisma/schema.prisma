@@ -1,0 +1,257 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  emailVerified  DateTime?
+  image          String?
+  hashedPassword String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  accounts       Account[]
+  sessions       Session[]
+  memberships    Membership[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Organization {
+  id                   String               @id @default(cuid())
+  name                 String
+  slug                 String               @unique
+  plan                 Plan                 @default(FREE)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  memberships          Membership[]
+  stripeConnections    StripeConnection[]
+  paymentFailures      PaymentFailure[]
+  customers            Customer[]
+  checkoutEvents       CheckoutEvent[]
+  notificationLogs     NotificationLog[]
+  webhookEventLogs     WebhookEventLog[]
+  notificationSettings NotificationSetting?
+}
+
+enum Plan {
+  FREE
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role         @default(MEMBER)
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model StripeConnection {
+  id              String       @id @default(cuid())
+  organizationId  String
+  stripeAccountId String?
+  webhookSecret   String
+  liveMode        Boolean      @default(false)
+  connectedAt     DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId])
+}
+
+model Customer {
+  id               String          @id @default(cuid())
+  organizationId   String
+  stripeCustomerId String
+  email            String
+  name             String?
+  phone            String?
+  metadata         Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  paymentFailures  PaymentFailure[]
+  checkoutEvents   CheckoutEvent[]
+
+  @@unique([organizationId, stripeCustomerId])
+  @@index([organizationId, email])
+}
+
+model PaymentFailure {
+  id                    String            @id @default(cuid())
+  organizationId        String
+  customerId            String?
+  stripePaymentIntentId String?
+  stripeInvoiceId       String?
+  stripeChargeId        String?
+  stripeCustomerId      String
+  amount                Int
+  currency              String            @default("usd")
+  failureCode           String?
+  failureMessage        String?
+  humanReadableReason   String?
+  paymentMethodType     String?
+  paymentMethodLast4    String?
+  subscriptionId        String?
+  productName           String?
+  invoiceUrl            String?
+  retryCount            Int               @default(0)
+  nextRetryAt           DateTime?
+  status                FailureStatus     @default(OPEN)
+  rawEvent              Json
+  occurredAt            DateTime
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  organization          Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer              Customer?         @relation(fields: [customerId], references: [id])
+  notificationLogs      NotificationLog[]
+
+  @@index([organizationId, occurredAt])
+  @@index([organizationId, status])
+  @@index([stripeCustomerId])
+}
+
+enum FailureStatus {
+  OPEN
+  RETRYING
+  RECOVERED
+  WRITTEN_OFF
+}
+
+model CheckoutEvent {
+  id             String            @id @default(cuid())
+  organizationId String
+  customerId     String?
+  sessionId      String
+  eventType      CheckoutEventType
+  page           String?
+  url            String?
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  device         String?
+  browser        String?
+  ipAddress      String?
+  metadata       Json?
+  occurredAt     DateTime
+  createdAt      DateTime          @default(now())
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer?         @relation(fields: [customerId], references: [id])
+
+  @@index([organizationId, sessionId])
+  @@index([organizationId, occurredAt])
+}
+
+enum CheckoutEventType {
+  PAGE_VIEW
+  CHECKOUT_INITIATED
+  PAYMENT_ATTEMPT
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  DROP_OFF
+}
+
+model NotificationLog {
+  id               String              @id @default(cuid())
+  organizationId   String
+  paymentFailureId String?
+  channel          NotificationChannel
+  recipient        String
+  subject          String?
+  body             String              @db.Text
+  status           NotificationStatus  @default(PENDING)
+  attempts         Int                 @default(0)
+  lastAttemptAt    DateTime?
+  sentAt           DateTime?
+  errorMessage     String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  paymentFailure   PaymentFailure?     @relation(fields: [paymentFailureId], references: [id])
+
+  @@index([organizationId, createdAt])
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+  SMS
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  RETRYING
+}
+
+model NotificationSetting {
+  id                 String       @id @default(cuid())
+  organizationId     String       @unique
+  emailEnabled       Boolean      @default(true)
+  emailRecipients    String[]
+  whatsappEnabled    Boolean      @default(false)
+  whatsappRecipients String[]
+  smsEnabled         Boolean      @default(false)
+  smsRecipients      String[]
+  minAmountThreshold Int          @default(0)
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model WebhookEventLog {
+  id              String       @id @default(cuid())
+  organizationId  String
+  stripeEventId   String       @unique
+  eventType       String
+  processed       Boolean      @default(false)
+  processingError String?
+  rawPayload      Json
+  receivedAt      DateTime     @default(now())
+  processedAt     DateTime?
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, receivedAt])
+}
