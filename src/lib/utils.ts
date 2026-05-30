@@ -77,3 +77,9 @@ export function getInitials(name: string): string {
     .toUpperCase()
     .slice(0, 2);
 }
+
+export function generateWebhookEndpoint(orgSlug?: string): string {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return `${baseUrl}/api/webhooks/stripe`;
+}

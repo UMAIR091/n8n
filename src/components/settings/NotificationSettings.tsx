@@ -7,32 +7,44 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { X, Plus } from "lucide-react";
-import type { NotificationSetting } from "@/types";
+
+interface InitialSettings {
+  emailEnabled: boolean;
+  emailRecipients: string[];
+  whatsappEnabled: boolean;
+  whatsappRecipients: string[];
+  minAmountThreshold: number;
+  smsEnabled?: boolean;
+  smsRecipients?: string[];
+}
 
 interface NotificationSettingsProps {
-  settings: NotificationSetting | null;
-  onSave: (settings: Partial<NotificationSetting>) => Promise<void>;
+  orgId?: string;
+  initial?: InitialSettings;
+  // Legacy props
+  settings?: { emailEnabled: boolean; emailRecipients: string[]; whatsappEnabled: boolean; whatsappRecipients: string[]; minAmountThreshold: number } | null;
+  onSave?: (s: Partial<InitialSettings>) => Promise<void>;
 }
 
 export function NotificationSettings({
+  orgId,
+  initial,
   settings,
   onSave,
 }: NotificationSettingsProps) {
-  const [emailEnabled, setEmailEnabled] = useState(
-    settings?.emailEnabled ?? true
-  );
-  const [emailRecipients, setEmailRecipients] = useState<string[]>(
-    settings?.emailRecipients ?? []
-  );
-  const [whatsappEnabled, setWhatsappEnabled] = useState(
-    settings?.whatsappEnabled ?? false
-  );
-  const [whatsappRecipients, setWhatsappRecipients] = useState<string[]>(
-    settings?.whatsappRecipients ?? []
-  );
-  const [minAmount, setMinAmount] = useState(
-    (settings?.minAmountThreshold ?? 0) / 100
-  );
+  const defaults = initial || settings || {
+    emailEnabled: true,
+    emailRecipients: [],
+    whatsappEnabled: false,
+    whatsappRecipients: [],
+    minAmountThreshold: 0,
+  };
+
+  const [emailEnabled, setEmailEnabled] = useState(defaults.emailEnabled);
+  const [emailRecipients, setEmailRecipients] = useState<string[]>(defaults.emailRecipients);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(defaults.whatsappEnabled);
+  const [whatsappRecipients, setWhatsappRecipients] = useState<string[]>(defaults.whatsappRecipients);
+  const [minAmount, setMinAmount] = useState((defaults.minAmountThreshold ?? 0) / 100);
   const [newEmail, setNewEmail] = useState("");
   const [newWhatsapp, setNewWhatsapp] = useState("");
   const [saving, setSaving] = useState(false);
@@ -71,17 +83,34 @@ export function NotificationSettings({
     setSaving(true);
     setError("");
     try {
-      await onSave({
+      const payload = {
         emailEnabled,
         emailRecipients,
         whatsappEnabled,
         whatsappRecipients,
+        smsEnabled: false,
+        smsRecipients: [],
         minAmountThreshold: Math.round(minAmount * 100),
-      });
+      };
+
+      if (onSave) {
+        await onSave(payload);
+      } else {
+        const res = await fetch("/api/notifications/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to save");
+        }
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch {
-      setError("Failed to save settings");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -98,7 +127,7 @@ export function NotificationSettings({
       <CardContent className="space-y-8">
         {/* Minimum Amount */}
         <div className="space-y-2">
-          <Label htmlFor="min-amount">Minimum Failure Amount</Label>
+          <Label htmlFor="min-amount">Minimum Failure Amount (USD)</Label>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">$</span>
             <Input
@@ -112,18 +141,16 @@ export function NotificationSettings({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Only notify for failures above this amount. Set to $0 for all failures.
+            Only notify for failures at or above this amount. Set to $0 for all failures.
           </p>
         </div>
 
-        {/* Email Settings */}
+        {/* Email */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-medium">Email Notifications</h3>
-              <p className="text-sm text-muted-foreground">
-                Receive email alerts via Resend
-              </p>
+              <p className="text-sm text-muted-foreground">Via Resend</p>
             </div>
             <button
               onClick={() => setEmailEnabled(!emailEnabled)}
@@ -143,11 +170,7 @@ export function NotificationSettings({
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {emailRecipients.map((email) => (
-                  <Badge
-                    key={email}
-                    variant="secondary"
-                    className="flex items-center gap-1 pr-1"
-                  >
+                  <Badge key={email} variant="secondary" className="flex items-center gap-1 pr-1">
                     {email}
                     <button
                       onClick={() => removeEmail(email)}
@@ -175,14 +198,12 @@ export function NotificationSettings({
           )}
         </div>
 
-        {/* WhatsApp Settings */}
+        {/* WhatsApp */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-medium">WhatsApp Notifications</h3>
-              <p className="text-sm text-muted-foreground">
-                Receive WhatsApp alerts via Twilio
-              </p>
+              <p className="text-sm text-muted-foreground">Via Twilio</p>
             </div>
             <button
               onClick={() => setWhatsappEnabled(!whatsappEnabled)}
@@ -202,11 +223,7 @@ export function NotificationSettings({
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {whatsappRecipients.map((num) => (
-                  <Badge
-                    key={num}
-                    variant="secondary"
-                    className="flex items-center gap-1 pr-1"
-                  >
+                  <Badge key={num} variant="secondary" className="flex items-center gap-1 pr-1">
                     {num}
                     <button
                       onClick={() => removeWhatsapp(num)}
@@ -237,7 +254,7 @@ export function NotificationSettings({
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Saving..." : saved ? "Saved!" : "Save Notification Settings"}
+          {saving ? "Saving..." : saved ? "Saved!" : "Save Settings"}
         </Button>
       </CardContent>
     </Card>

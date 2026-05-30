@@ -13,7 +13,7 @@ interface FailureTableProps {
   total: number;
   page: number;
   pageSize: number;
-  onPageChange: (page: number) => void;
+  onPageChange?: (page: number) => void;
 }
 
 const statusConfig = {
@@ -152,7 +152,7 @@ export function FailureTable({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onPageChange(page - 1)}
+              onClick={() => onPageChange?.(page - 1)}
               disabled={page <= 1}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -161,7 +161,7 @@ export function FailureTable({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onPageChange(page + 1)}
+              onClick={() => onPageChange?.(page + 1)}
               disabled={page >= totalPages}
             >
               Next

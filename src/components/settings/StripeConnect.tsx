@@ -5,19 +5,24 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Copy, Check, ExternalLink } from "lucide-react";
+import { Copy, Check, ExternalLink, CheckCircle } from "lucide-react";
 
 interface StripeConnectProps {
-  organizationId: string;
   webhookUrl: string;
-  hasWebhookSecret: boolean;
+  isConnected?: boolean;
+  liveMode?: boolean;
+  // Legacy props
+  organizationId?: string;
+  hasWebhookSecret?: boolean;
 }
 
 export function StripeConnect({
-  organizationId,
   webhookUrl,
+  isConnected,
+  liveMode,
   hasWebhookSecret,
 }: StripeConnectProps) {
+  const connected = isConnected ?? hasWebhookSecret ?? false;
   const [copied, setCopied] = useState(false);
   const [webhookSecret, setWebhookSecret] = useState("");
   const [saving, setSaving] = useState(false);
@@ -74,6 +79,17 @@ export function StripeConnect({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Connection status */}
+        {connected && (
+          <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 p-3">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <span className="text-sm text-green-800 font-medium">
+              Stripe webhook connected
+              {liveMode ? " (Live mode)" : " (Test mode)"}
+            </span>
+          </div>
+        )}
+
         {/* Step 1: Webhook URL */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -92,9 +108,6 @@ export function StripeConnect({
               )}
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground">
-            This URL receives payment events from Stripe.
-          </p>
         </div>
 
         {/* Step 2: Configure in Stripe */}
@@ -115,7 +128,7 @@ export function StripeConnect({
             <ExternalLink className="h-3 w-3" />
           </a>
           <div className="rounded-lg bg-muted p-3">
-            <p className="text-sm font-medium mb-2">Required events to listen for:</p>
+            <p className="text-sm font-medium mb-2">Listen for these events:</p>
             <ul className="space-y-1 text-sm text-muted-foreground font-mono">
               <li>• payment_intent.payment_failed</li>
               <li>• invoice.payment_failed</li>
@@ -130,18 +143,10 @@ export function StripeConnect({
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
               3
             </div>
-            <h3 className="font-medium">Enter webhook signing secret</h3>
+            <h3 className="font-medium">
+              {connected ? "Update webhook signing secret" : "Enter webhook signing secret"}
+            </h3>
           </div>
-          {hasWebhookSecret && (
-            <div className="rounded-lg bg-green-50 border border-green-200 p-3">
-              <p className="text-sm text-green-800 font-medium">
-                ✓ Webhook secret configured
-              </p>
-              <p className="text-xs text-green-600 mt-0.5">
-                Update it below to change the secret.
-              </p>
-            </div>
-          )}
           <div className="space-y-2">
             <Label htmlFor="webhook-secret">Signing Secret</Label>
             <Input
@@ -155,7 +160,7 @@ export function StripeConnect({
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : saved ? "Saved!" : "Save Webhook Secret"}
+            {saving ? "Saving..." : saved ? "Saved!" : connected ? "Update Secret" : "Save Webhook Secret"}
           </Button>
         </div>
       </CardContent>
