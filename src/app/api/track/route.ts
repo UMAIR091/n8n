@@ -93,9 +93,7 @@ export async function POST(req: NextRequest) {
   // Upsert customer if customerId provided
   const customerIdMap: Record<string, string> = {};
 
-  const customerStripeIds = [
-    ...new Set(events.map((e) => e.customerId).filter((id): id is string => !!id)),
-  ];
+  const customerStripeIds = Array.from(new Set(events.map((e) => e.customerId).filter((id): id is string => !!id)));
 
   for (const stripeCustomerId of customerStripeIds) {
     let customer = await prisma.customer.findUnique({
