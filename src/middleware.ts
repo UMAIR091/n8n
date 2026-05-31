@@ -1,13 +1,14 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
+
+const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
-
   const isLoggedIn = !!req.auth;
 
-  // Protect dashboard routes
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/(dashboard)")) {
+  if (pathname.startsWith("/dashboard")) {
     if (!isLoggedIn) {
       const loginUrl = new URL("/login", req.url);
       loginUrl.searchParams.set("callbackUrl", pathname);
@@ -15,7 +16,6 @@ export default auth((req) => {
     }
   }
 
-  // Redirect logged-in users away from auth pages
   if (isLoggedIn && (pathname === "/login" || pathname === "/register")) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
