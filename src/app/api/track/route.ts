@@ -94,8 +94,8 @@ export async function POST(req: NextRequest) {
   const customerIdMap: Record<string, string> = {};
 
   const customerStripeIds = [
-    ...new Set(events.map((e) => e.customerId).filter(Boolean)),
-  ] as string[];
+    ...new Set(events.map((e) => e.customerId).filter((id): id is string => !!id)),
+  ];
 
   for (const stripeCustomerId of customerStripeIds) {
     let customer = await prisma.customer.findUnique({
